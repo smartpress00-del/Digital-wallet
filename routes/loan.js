@@ -1,82 +1,55 @@
-const router = require('express').Router();
+const express = require('express');
 const User = require('../models/User');
-const jwt = require('jsonwebtoken');
+const auth = require('../middleware/auth');
+const router = express.Router();
 
-// Authentication middleware
-const auth = (req, res, next) => {
-  const token = req.header('auth-token');
-
-  if (!token) {
-    return res.status(401).json("Access Denied");
-  }
-
-  try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
-    next();
-  } catch (err) {
-    res.status(400).json("Invalid Token");
-  }
-};
-
-// Request Loan
+// Request a loan
 router.post('/request', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-
     const { amount, interest, dueDate } = req.body;
+    if (amount <= 0) return res.status(400).json({ message: 'Amount must be positive' });
 
-    user.loans.push({
-      amount: amount,
-      interest: interest,
-      status: "approved",
-      dueDate: dueDate
-    });
-
-    user.walletBalance += amount;
-
+    const user = await User.findById(req.user.id);
+    user.loans.push({ amount, interest, status: 'pending', dueDate });
     await user.save();
 
-    res.json({
-      message: "Loan approved",
-      balance: user.walletBalance
-    });
-
+    res.json({ success: true, message: 'Loan request submitted', loans: user.loans });
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Repay Loan
-router.post('/repay', auth, async (req, res) => {
+// Get loan status
+router.get('/status', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
+    res.json({ loans: user.loans });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-    const loan = user.loans.find(l => l.status === "approved");
+// Repay a loan
+router.post('/repay', auth, async (req, res) => {
+  try {
+    const { loanId, amount } = req.body;
+    const user = await User.findById(req.user.id);
 
-    if (!loan) {
-      return res.status(400).json("No active loan");
-    }
+    const loan = user.loans.id(loanId);
+    if (!loan) return res.status(404).json({ message: 'Loan not found' });
+    if (amount <= 0) return res.status(400).json({ message: 'Amount must be positive' });
 
-    const totalDue = loan.amount + (loan.amount * loan.interest / 100);
+    // Deduct repayment from wallet
+    if (user.walletBalance < amount) return res.status(400).json({ message: 'Insufficient balance' });
+    user.walletBalance -= amount;
 
-    if (user.walletBalance < totalDue) {
-      return res.status(400).json("Insufficient balance");
-    }
-
-    user.walletBalance -= totalDue;
-
-    loan.status = "repaid";
+    loan.amount -= amount;
+    if (loan.amount <= 0) loan.status = 'repaid';
 
     await user.save();
-
-    res.json({
-      message: "Loan repaid successfully",
-      balance: user.walletBalance
-    });
-
+    res.json({ success: true, message: 'Repayment successful', loan });
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
