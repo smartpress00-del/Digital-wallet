@@ -23,7 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/loan', loanRoutes);
 
-apps.use(errorHandler); // must come last
+app.use(errorHandler); // must come last
 
 const PORT = process.env.PORT || 5000;
 app.listen(5000, () => console.log("Server running on port 5000"));
