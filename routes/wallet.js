@@ -1,54 +1,67 @@
-const auth = require('../middleware/auth');
-// routes/wallet.js
 const express = require('express');
 const User = require('../models/User');
-const auth = require('../middleware/auth');
+const auth = require('../middleware/auth'); // ✅ centralized middleware
+const { body, validationResult } = require('express-validator');
 const router = express.Router();
 
-// Get balance
+// Get wallet balance
 router.get('/balance', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    res.json({ balance: user.walletBalance });
+    res.json({ success: true, balance: user.walletBalance });
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
 // Deposit funds
-router.post('/deposit', auth, async (req, res) => {
-  try {
-    const { amount } = req.body;
-    if (amount <= 0) return res.status(400).json({ message: 'Amount must be positive' });
+router.post('/deposit',
+  auth,
+  body('amount').isFloat({ gt: 0 }).withMessage('Amount must be positive'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
 
-    const user = await User.findById(req.user.id);
-    user.walletBalance += amount;
-    await user.save();
-
-    res.json({ success: true, balance: user.walletBalance });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    try {
+      const user = await User.findById(req.user.id);
+      user.walletBalance += req.body.amount;
+      await user.save();
+      res.json({ success: true, message: 'Deposit successful', balance: user.walletBalance });
+    } catch (err) {
+      res.status(500).json({ success: false, message: 'Server error' });
+    }
   }
-});
+);
 
 // Transfer funds
-router.post('/transfer', auth, async (req, res) => {
-  try {
-    const sender = await User.findById(req.user.id);
-    const receiver = await User.findOne({ email: req.body.to });
-    if (!receiver) return res.status(400).json({ message: 'Receiver not found' });
-    if (sender.walletBalance < req.body.amount) return res.status(400).json({ message: 'Insufficient balance' });
+router.post('/transfer',
+  auth,
+  body('amount').isFloat({ gt: 0 }).withMessage('Amount must be positive'),
+  body('recipientId').notEmpty().withMessage('Recipient ID is required'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
 
-    sender.walletBalance -= req.body.amount;
-    receiver.walletBalance += req.body.amount;
+    try {
+      const { recipientId, amount } = req.body;
+      const sender = await User.findById(req.user.id);
+      const receiver = await User.findById(recipientId);
 
-    await sender.save();
-    await receiver.save();
+      if (!receiver) return res.status(404).json({ success: false, message: 'Recipient not found' });
+      if (sender.walletBalance < amount) return res.status(400).json({ success: false, message: 'Insufficient balance' });
 
-    res.json({ message: 'Transfer successful', senderBalance: sender.walletBalance });
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+      sender.walletBalance -= amount;
+      receiver.walletBalance += amount;
+
+      // ✅ Atomic save
+      await Promise.all([sender.save(), receiver.save()]);
+
+      res.json({ success: true, message: 'Transfer successful', balance: sender.walletBalance });
+    } catch (err) {
+      res.status(500).json({ success: false, message: 'Server error' });
+    }
   }
-});
+);
 
 module.exports = router;
+
