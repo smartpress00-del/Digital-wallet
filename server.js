@@ -1,3 +1,4 @@
+const errorHandler = require("./middleware/errorHandler");
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -22,3 +23,4 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/loan', loanRoutes);
 
 app.listen(5000, () => console.log("Server running on port 5000"));
+app.use(errorHandler); // must come last
