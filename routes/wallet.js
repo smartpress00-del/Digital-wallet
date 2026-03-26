@@ -1,3 +1,4 @@
+const auth = require('../middleware/auth');
 // routes/wallet.js
 const express = require('express');
 const User = require('../models/User');
