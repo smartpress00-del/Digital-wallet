@@ -28,4 +28,25 @@ app.use(errorHandler); // must come last
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+const express = require('express');
+const app = express();
+
+// Existing imports
+const authRoutes = require('./routes/auth');
+const walletRoutes = require('./routes/wallet');
+
+// ✅ Import loan routes
+const loanRoutes = require('./routes/loan');
+
+// Middleware
+app.use(express.json());
+
+// Mount routes
+app.use('/api/auth', authRoutes);
+app.use('/api/wallet', walletRoutes);
+app.use('/api/loan', loanRoutes); // ✅ mount loan routes
+
+// Server listen
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
