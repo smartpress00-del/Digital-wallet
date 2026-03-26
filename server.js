@@ -1,3 +1,4 @@
+app.use(express.json());
 const errorHandler = require("./middleware/errorHandler");
 require('dotenv').config();
 const express = require('express');
